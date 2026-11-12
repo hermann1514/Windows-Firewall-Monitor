@@ -15,11 +15,13 @@ public partial class MainWindow : Window
         InitializeComponent();
         _vm = new MainViewModel(new FirewallService(), new LogWatcherService());
         DataContext = _vm;
+        ThemeService.ApplyToWindow(this);
 
         // Newest entries are inserted at the top, so "auto-scroll" means: stay at the top.
+        // While an entry is selected the user is inspecting it, so the list does not jump.
         _vm.BatchApplied += () =>
         {
-            if (_vm.AutoScroll && LiveGrid.Items.Count > 0)
+            if (_vm.AutoScroll && !_vm.HasSelection && LiveGrid.Items.Count > 0)
                 LiveGrid.ScrollIntoView(LiveGrid.Items[0]);
         };
 

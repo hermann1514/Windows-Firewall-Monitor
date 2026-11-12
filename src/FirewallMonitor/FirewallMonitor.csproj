@@ -9,6 +9,7 @@
     <RootNamespace>FirewallMonitor</RootNamespace>
     <AssemblyName>FirewallMonitor</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>0.3.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

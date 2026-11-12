@@ -13,17 +13,15 @@ public partial class NewRuleDialog : Window
         InitializeComponent();
         _vm = vm;
         DataContext = vm;
+        FirewallMonitor.Services.ThemeService.ApplyToWindow(this);
     }
 
     private void Ok_Click(object sender, RoutedEventArgs e)
     {
         var error = _vm.Validate();
-        if (error != null)
-        {
-            MessageBox.Show(this, error, "Eingabe prüfen", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-        DialogResult = true;
+        ErrorText.Text = error ?? "";
+        ErrorText.Visibility = error == null ? Visibility.Collapsed : Visibility.Visible;
+        if (error == null) DialogResult = true;
     }
 
     private void Browse_Click(object sender, RoutedEventArgs e)

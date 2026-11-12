@@ -7,14 +7,17 @@ namespace FirewallMonitor.Views;
 /// <summary>Thin wrapper so view models do not touch WPF dialogs directly.</summary>
 public static class UiDialogs
 {
-    public static void Error(string message) =>
-        MessageBox.Show(message, "Fehler", MessageBoxButton.OK, MessageBoxImage.Error);
+    private static Window? Owner =>
+        Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? Application.Current?.MainWindow;
 
-    public static void Info(string message) =>
-        MessageBox.Show(message, "Hinweis", MessageBoxButton.OK, MessageBoxImage.Information);
+    public static void Error(string title, string message) =>
+        MessageDialog.Show(Owner, MessageKind.Error, title, message);
 
-    public static bool Confirm(string message) =>
-        MessageBox.Show(message, "Bestätigen", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+    public static void Info(string title, string message) =>
+        MessageDialog.Show(Owner, MessageKind.Info, title, message);
+
+    public static bool Confirm(string title, string message, string confirmText, bool danger = false) =>
+        MessageDialog.Show(Owner, MessageKind.Confirm, title, message, confirmText, danger);
 
     public static string? PickCsvPath()
     {

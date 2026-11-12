@@ -18,8 +18,15 @@ public sealed class FirewallRuleInfo : ObservableObject
     public bool Enabled
     {
         get => _enabled;
-        set => Set(ref _enabled, value);
+        set { if (Set(ref _enabled, value)) OnPropertyChanged(nameof(EnabledText)); }
     }
+
+    public string EnabledText => Enabled ? "Aktiv" : "Inaktiv";
+    public bool IsInbound => DirectionText == "Eingehend";
+    public bool IsBlock => ActionText == "Blockieren";
+    public string DirectionShort => IsInbound ? "Ein" : "Aus";
+    public string ProgramName => string.IsNullOrEmpty(Program) ? "—" : Path.GetFileName(Program);
+    public string PortsText => string.IsNullOrEmpty(Ports) ? "—" : Ports;
 }
 
 public sealed class NewRuleRequest

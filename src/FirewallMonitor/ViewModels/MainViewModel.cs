@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
+using System.Reflection;
+using System.Windows;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -16,7 +18,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private const int MaxEntries = 20_000;
 
     public static readonly string[] FilterColumns = { "Alle", "Prozess", "IP", "Port", "Protokoll", "Aktion" };
-    public static readonly string[] ActionFilters = { "Alle", "Zugelassen", "Blockiert" };
 
     private readonly IFirewallService _fw;
     private readonly LogWatcherService _watcher;
@@ -26,12 +27,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private bool _isPaused;
     private bool _autoScroll = true;
+    private bool _showInspector = true;
     private string _filterText = "";
     private string _filterColumn = "Alle";
     private string _actionFilter = "Alle";
-    private string _status = "Bereit.";
+    private string _status = "";
+    private string _currentPage = "Live";
+    private string _themeMode = ThemeService.Mode;
     private ConnectionEntry? _selected;
-    private bool _statsDirty;
+    private bool _statsDirty = true;
+    private int _visibleCount, _blockedCount, _allowedCount;
 
     public MainViewModel(IFirewallService fw, LogWatcherService watcher)
     {
@@ -43,7 +48,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Rules = new RulesViewModel(fw, s => StatusMessage = s);
 
         _watcher.EntriesRead += batch => { foreach (var e in batch) _queue.Enqueue(e); };
-        _watcher.Error += msg => Application_Invoke(() => StatusMessage = "Log-Fehler: " + msg);
+        _watcher.Error += msg => Application.Current?.Dispatcher.InvokeAsync(() => StatusMessage = "Log-Fehler: " + msg);
 
         // Batch updates: the UI drains the queue at a fixed rate instead of per-item updates.
         _batchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
@@ -57,6 +62,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         EnableLoggingCommand = new RelayCommand(_ => Run(EnableLoggingAsync));
         CreateProcessRuleCommand = new RelayCommand(_ => Run(() => QuickRuleAsync(false)), _ => Selected != null);
         CreateIpRuleCommand = new RelayCommand(_ => Run(() => QuickRuleAsync(true)), _ => Selected != null);
+        ClearSelectionCommand = new RelayCommand(_ => Selected = null);
+        CopyRawCommand = new RelayCommand(_ => CopyRaw(), _ => Selected != null);
+        FilterProcessCommand = new RelayCommand(p => ApplyQuickFilter("Prozess", p as string));
+        FilterIpCommand = new RelayCommand(p => ApplyQuickFilter("IP", p as string));
+        ClearFilterCommand = new RelayCommand(_ => { FilterText = ""; FilterColumn = "Alle"; ActionFilter = "Alle"; });
     }
 
     public RangeObservableCollection<ConnectionEntry> Entries { get; } = new();
@@ -72,6 +82,24 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ICommand EnableLoggingCommand { get; }
     public ICommand CreateProcessRuleCommand { get; }
     public ICommand CreateIpRuleCommand { get; }
+    public ICommand ClearSelectionCommand { get; }
+    public ICommand CopyRawCommand { get; }
+    public ICommand FilterProcessCommand { get; }
+    public ICommand FilterIpCommand { get; }
+    public ICommand ClearFilterCommand { get; }
+
+    public string LogPath => _watcher.LogPath;
+    public string Version => Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "";
+
+    public string CurrentPage { get => _currentPage; set => Set(ref _currentPage, value); }
+
+    public string ThemeMode
+    {
+        get => _themeMode;
+        set { if (Set(ref _themeMode, value)) ThemeService.Apply(value); }
+    }
+
+    // ---------- Live state ----------
 
     public bool IsPaused
     {
@@ -80,29 +108,60 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (!Set(ref _isPaused, value)) return;
             OnPropertyChanged(nameof(PauseText));
-            OnPropertyChanged(nameof(PendingText));
+            OnPropertyChanged(nameof(PauseGlyph));
+            OnPropertyChanged(nameof(LiveText));
             if (!value) ApplyBatch(); // resume: flush everything collected meanwhile
         }
     }
 
-    public string PauseText => IsPaused ? "▶ Fortsetzen" : "⏸ Pause";
-    public string PendingText => IsPaused ? $"{_queue.Count} Einträge wartend" : "";
+    public string PauseText => IsPaused ? "Fortsetzen" : "Pause";
+    public string PauseGlyph => IsPaused ? "" : "";
+    public string LiveText => IsPaused ? "Pausiert" : "Live";
+    public int PendingCount => _queue.Count;
+
     public bool AutoScroll { get => _autoScroll; set => Set(ref _autoScroll, value); }
+
+    public bool ShowInspector
+    {
+        get => _showInspector;
+        set { if (Set(ref _showInspector, value) && value) _statsDirty = true; }
+    }
+
+    // ---------- Filter ----------
 
     public string FilterText { get => _filterText; set { if (Set(ref _filterText, value)) RefreshFilter(); } }
     public string FilterColumn { get => _filterColumn; set { if (Set(ref _filterColumn, value)) RefreshFilter(); } }
     public string ActionFilter { get => _actionFilter; set { if (Set(ref _actionFilter, value)) RefreshFilter(); } }
 
+    public bool IsFiltered => FilterText.Trim().Length > 0 || ActionFilter != "Alle";
+
+    // ---------- Overview numbers (based on the current view) ----------
+
+    public int VisibleCount => _visibleCount;
+    public int BlockedCount => _blockedCount;
+    public int AllowedCount => _allowedCount;
+
+    public string CountText => _visibleCount == Entries.Count
+        ? $"{Entries.Count:N0} Einträge"
+        : $"{_visibleCount:N0} von {Entries.Count:N0} Einträgen";
+
+    public string EmptyTitle => Entries.Count == 0 ? "Warte auf Verbindungen" : "Keine Treffer";
+
+    public string EmptyText => Entries.Count == 0
+        ? "Neue Einträge aus dem Firewall-Protokoll erscheinen hier automatisch."
+        : "Für den aktuellen Filter gibt es keine Einträge.";
+
     public string StatusMessage { get => _status; set => Set(ref _status, value); }
-    public string CountText => $"{View.Cast<object>().Count()} / {Entries.Count} Einträge";
+
+    // ---------- Selection ----------
 
     public ConnectionEntry? Selected
     {
         get => _selected;
-        set { if (Set(ref _selected, value)) OnPropertyChanged(nameof(DetailsText)); }
+        set { if (Set(ref _selected, value)) OnPropertyChanged(nameof(HasSelection)); }
     }
 
-    public string DetailsText => Selected?.Details ?? "Eintrag auswählen, um alle Details zu sehen.";
+    public bool HasSelection => _selected != null;
 
     /// <summary>Raised after a batch was added so the view can scroll to the newest entry.</summary>
     public event Action? BatchApplied;
@@ -115,13 +174,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             await RefreshAllAsync();
             if (!_watcher.LogExists &&
-                UiDialogs.Confirm("Die Firewall-Logdatei existiert noch nicht.\nLogging (erlaubt + blockiert) jetzt aktivieren?"))
+                UiDialogs.Confirm("Firewall-Protokoll aktivieren?",
+                    "Die Logdatei der Windows Firewall existiert noch nicht. Ohne Protokollierung können keine Verbindungen angezeigt werden.",
+                    "Aktivieren"))
                 await EnableLoggingAsync();
             _watcher.Start();
         }
         catch (Exception ex)
         {
-            UiDialogs.Error("Start fehlgeschlagen:\n" + ex.Message);
+            UiDialogs.Error("Start fehlgeschlagen", ex.Message);
         }
     }
 
@@ -136,7 +197,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private async Task ToggleProfileAsync(ProfileViewModel p)
     {
         var target = !p.IsEnabled;
-        if (!target && !UiDialogs.Confirm($"Firewall-Profil „{p.Name}“ wirklich ausschalten?")) return;
+        if (!target && !UiDialogs.Confirm($"Profil „{p.Name}“ ausschalten?",
+                "Solange das Profil ausgeschaltet ist, filtert die Windows Firewall in Netzwerken dieses Typs keinen Datenverkehr.",
+                "Ausschalten", danger: true))
+            return;
         await Task.Run(() => _fw.SetProfileEnabled(p.Flag, target));
         p.IsEnabled = target;
         StatusMessage = $"Profil {p.Name}: {p.StatusText}.";
@@ -145,12 +209,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private async Task EnableLoggingAsync()
     {
         await Task.Run(_fw.EnableLogging);
-        StatusMessage = "Firewall-Logging aktiviert (erlaubt + blockiert).";
+        StatusMessage = "Firewall-Protokollierung aktiviert (zugelassene und blockierte Verbindungen).";
     }
 
     private void ApplyBatch()
     {
-        OnPropertyChanged(nameof(PendingText));
+        OnPropertyChanged(nameof(PendingCount));
         if (IsPaused || _queue.IsEmpty) return;
 
         var batch = new List<ConnectionEntry>();
@@ -159,18 +223,32 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         var keep = Selected;
         Entries.PrependRange(batch, MaxEntries);
-        if (keep != null) { _selected = keep; OnPropertyChanged(nameof(Selected)); } // Reset clears selection
+        if (keep != null && !ReferenceEquals(_selected, keep))
+        {
+            // The Reset notification clears the grid selection; restore it.
+            _selected = keep;
+            OnPropertyChanged(nameof(Selected));
+            OnPropertyChanged(nameof(HasSelection));
+        }
 
         _statsDirty = true;
-        OnPropertyChanged(nameof(CountText));
         BatchApplied?.Invoke();
     }
 
     private void RefreshFilter()
     {
         View.Refresh();
-        _statsDirty = true;
-        OnPropertyChanged(nameof(CountText));
+        OnPropertyChanged(nameof(IsFiltered));
+        UpdateStats();
+    }
+
+    private void ApplyQuickFilter(string column, string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return;
+        Selected = null;
+        _filterColumn = column;
+        OnPropertyChanged(nameof(FilterColumn));
+        FilterText = value == "(unbekannt)" ? "—" : value;
     }
 
     private bool Match(object o)
@@ -186,11 +264,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         return FilterColumn switch
         {
             "Prozess" => C(e.ProcessName) || C(e.PidText),
-            "IP" => C(e.SrcIp) || C(e.DstIp),
-            "Port" => C(e.SrcPort.ToString()) || C(e.DstPort.ToString()),
+            "IP" => C(e.SrcIp) || C(e.DstIp) || C(e.Local) || C(e.Remote),
+            "Port" => C(e.SrcPort.ToString()) || C(e.DstPort.ToString()) || C(e.Local) || C(e.Remote),
             "Protokoll" => C(e.Protocol),
             "Aktion" => C(e.ActionText),
-            _ => C(e.ProcessName) || C(e.SrcIp) || C(e.DstIp) || C(e.SrcPort.ToString()) ||
+            _ => C(e.ProcessName) || C(e.SrcIp) || C(e.DstIp) || C(e.Local) || C(e.Remote) || C(e.SrcPort.ToString()) ||
                  C(e.DstPort.ToString()) || C(e.Protocol) || C(e.ActionText) || C(e.DirectionText)
         };
     }
@@ -198,8 +276,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void UpdateStats()
     {
         _statsDirty = false;
-        var visible = View.Cast<ConnectionEntry>().ToList();
 
+        var visible = View.Cast<ConnectionEntry>().ToList();
+        _visibleCount = visible.Count;
+        _blockedCount = visible.Count(e => e.IsBlocked);
+        _allowedCount = _visibleCount - _blockedCount;
+        OnPropertyChanged(nameof(VisibleCount));
+        OnPropertyChanged(nameof(BlockedCount));
+        OnPropertyChanged(nameof(AllowedCount));
+        OnPropertyChanged(nameof(CountText));
+        OnPropertyChanged(nameof(EmptyTitle));
+        OnPropertyChanged(nameof(EmptyText));
+
+        if (!ShowInspector) return;
         Fill(TopBlockedProcesses, visible.Where(e => e.IsBlocked)
             .GroupBy(e => e.ProcessName == "—" ? "(unbekannt)" : e.ProcessName));
         Fill(TopRemoteIps, visible.GroupBy(e => e.RemoteIp));
@@ -207,10 +296,24 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private static void Fill(ObservableCollection<CounterItem> target, IEnumerable<IGrouping<string, ConnectionEntry>> groups)
     {
-        var top = groups.Select(g => (g.Key, Count: g.Count())).OrderByDescending(x => x.Count).Take(10).ToList();
+        var top = groups.Select(g => (g.Key, Count: g.Count())).OrderByDescending(x => x.Count).Take(8).ToList();
         target.Clear();
         var max = top.Count > 0 ? top[0].Count : 1;
         foreach (var (key, count) in top) target.Add(new CounterItem(key, count, (double)count / max));
+    }
+
+    private void CopyRaw()
+    {
+        if (Selected == null) return;
+        try
+        {
+            Clipboard.SetText(Selected.RawLine);
+            StatusMessage = "Rohzeile in die Zwischenablage kopiert.";
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            StatusMessage = "Zwischenablage ist gerade belegt – bitte erneut versuchen.";
+        }
     }
 
     private void Export()
@@ -221,11 +324,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             var rows = View.Cast<ConnectionEntry>().ToList();
             CsvExporter.Export(path, rows);
-            StatusMessage = $"{rows.Count} Einträge exportiert: {path}";
+            StatusMessage = $"{rows.Count:N0} Einträge exportiert: {path}";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            UiDialogs.Error("Export fehlgeschlagen:\n" + ex.Message);
+            UiDialogs.Error("Export fehlgeschlagen", ex.Message);
         }
     }
 
@@ -250,7 +353,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (string.IsNullOrEmpty(e.ProcessPath))
             {
-                UiDialogs.Info("Für diesen Eintrag konnte kein Prozess ermittelt werden (kurzlebige oder blockierte Verbindung).");
+                UiDialogs.Info("Kein Prozess bekannt",
+                    "Für diese Verbindung konnte kein Prozess ermittelt werden (kurzlebige oder blockierte Verbindung). Lege stattdessen eine Regel für die IP-Adresse an.");
                 return;
             }
             vm.Name = $"Block {e.ProcessName}";
@@ -262,10 +366,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private static async void Run(Func<Task> action)
     {
         try { await action(); }
-        catch (Exception ex) { UiDialogs.Error(ex.Message); }
+        catch (Exception ex) { UiDialogs.Error("Aktion fehlgeschlagen", ex.Message); }
     }
-
-    private static void Application_Invoke(Action a) => System.Windows.Application.Current?.Dispatcher.BeginInvoke(a);
 
     public void Dispose()
     {

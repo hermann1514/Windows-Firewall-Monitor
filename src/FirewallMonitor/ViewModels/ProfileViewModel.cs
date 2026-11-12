@@ -26,10 +26,13 @@ public sealed class ProfileViewModel : ObservableObject
         {
             if (!Set(ref _isEnabled, value)) return;
             OnPropertyChanged(nameof(StatusText));
-            OnPropertyChanged(nameof(ToggleText));
+            OnPropertyChanged(nameof(ToolTip));
         }
     }
 
     public string StatusText => IsEnabled ? "Aktiv" : "Deaktiviert";
-    public string ToggleText => IsEnabled ? "Ausschalten" : "Einschalten";
+
+    public string ToolTip => IsEnabled
+        ? $"Profil „{Name}“ ist aktiv. Klicken zum Ausschalten."
+        : $"Profil „{Name}“ ist ausgeschaltet. Klicken zum Einschalten.";
 }

@@ -3,11 +3,15 @@
 WPF-Tool (.NET 8) für die Windows Firewall: Live-Ansicht von Verbindungen (zugelassen/blockiert), Analyse und Konfiguration.
 
 ## Funktionen
-- Status der Profile Domäne/Privat/Öffentlich (grün/rot), einzeln ein-/ausschaltbar
-- Live-Tracking aus `pfirewall.log` (FileSystemWatcher + Poll-Fallback), neueste Einträge oben, Auto-Scroll abschaltbar
-- Pause/Fortsetzen ohne Datenverlust (Einträge werden zwischengespeichert)
-- Filter (Spalte + Freitext, Aktion), Top-10 blockierte Prozesse / Remote-IPs, Detailpanel, CSV-Export der gefilterten Ansicht
-- Regeln auflisten, anlegen, aktivieren/deaktivieren, löschen; Rechtsklick im Live-Grid → Regel für Prozess/IP
+- **Kopfzeile:** Status der Profile Domäne/Privat/Öffentlich; Klick auf ein Profil schaltet es um (Ausschalten mit Bestätigung)
+- **Verbindungen:** Live-Tracking aus `pfirewall.log` (FileSystemWatcher + Poll-Fallback), neueste Einträge oben, Auto-Scroll abschaltbar
+- **Pause/Fortsetzen** ohne Datenverlust; ein Hinweisbalken zeigt, wie viele Einträge warten
+- **Suche** über alle Spalten oder eine gewählte Spalte (Prozess, IP, Port, …), Filter Alle/Zugelassen/Blockiert, CSV-Export der aktuellen Ansicht
+- **Seitenleiste:** ohne Auswahl eine Übersicht (Zähler, meist blockierte Prozesse, häufigste Remote-Adressen – Klick filtert die Liste); mit Auswahl die Details der Verbindung inkl. Rohzeile und Regel-Schnellaktionen
+- **Regeln:** auflisten, nach Richtung filtern, anlegen, aktivieren/deaktivieren, löschen (auch per Rechtsklick)
+
+## Design
+Eigenes, zurückhaltendes Theme ohne zusätzliche NuGet-Pakete (`Themes/Colors.*.xaml`, `Themes/Controls.xaml`): neutrale Farben, Farbe nur für Bedeutung (rot = blockiert), IPs/Ports in Monospace, eigene Dialoge statt Windows-MessageBox. Hell/Dunkel/System wählbar unter *Einstellungen*; Wechsel zur Laufzeit.
 
 ## Voraussetzungen
 - Windows 10/11, .NET 8 SDK (`winget install Microsoft.DotNet.SDK.8`)

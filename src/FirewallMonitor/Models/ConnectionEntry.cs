@@ -31,6 +31,14 @@ public sealed class ConnectionEntry
     public string DirectionText => !DirectionKnown ? "—" : IsOutbound ? "Ausgehend" : "Eingehend";
     public string PidText => Pid > 0 ? Pid.ToString() : "—";
 
+    // Display helpers for the table and the details panel.
+    public string DirectionShort => !DirectionKnown ? "—" : IsOutbound ? "Aus" : "Ein";
+    public string RemotePortText => RemotePort > 0 ? RemotePort.ToString() : "—";
+    public string LocalPortText => LocalPort > 0 ? LocalPort.ToString() : "—";
+    public string ProcessPathText => ProcessPath ?? "—";
+    public string SizeText => Size > 0 ? $"{Size} Byte" : "—";
+    public string TimestampText => Timestamp.ToString("dd.MM.yyyy HH:mm:ss");
+
     public string Details =>
         $"Zeit:       {Timestamp:yyyy-MM-dd HH:mm:ss}\n" +
         $"Aktion:     {ActionText}\n" +
