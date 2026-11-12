@@ -9,11 +9,13 @@
     <RootNamespace>FirewallMonitor</RootNamespace>
     <AssemblyName>FirewallMonitor</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <Using Include="System.IO" />
+    <Resource Include="Assets\app.ico" />
   </ItemGroup>
 
 </Project>

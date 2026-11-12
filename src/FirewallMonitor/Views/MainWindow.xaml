@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:FirewallMonitor.ViewModels"
         Style="{StaticResource WindowStyle}"
-        Title="Firewall Monitor" Height="840" Width="1360" MinHeight="620" MinWidth="1040">
+        Icon="/Assets/app.ico"
+        Title="Firewall Monitor" Height="840" Width="1360" MinHeight="620" MinWidth="1120">
     <Window.Resources>
         <Style x:Key="LiveRow" TargetType="DataGridRow" BasedOn="{StaticResource GridRow}">
             <EventSetter Event="PreviewMouseRightButtonDown" Handler="Row_RightClick" />
@@ -130,7 +131,8 @@
                         <!-- toolbar -->
                         <Grid Margin="16,12,12,12">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" MinWidth="210" MaxWidth="360" />
+                                <ColumnDefinition Width="6*" MinWidth="180" MaxWidth="380" />
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -170,7 +172,31 @@
                                 </StackPanel>
                             </Border>
 
-                            <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="10,0,0,0">
+                            <Border Grid.Column="2" Style="{StaticResource SegmentHost}" Margin="8,0,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton Content="Alle" Style="{StaticResource SegmentButton}" GroupName="Direction"
+                                                 ToolTip="Ein- und ausgehende Verbindungen"
+                                                 IsChecked="{Binding DirectionFilter, Converter={StaticResource Eq}, ConverterParameter=Alle}" />
+                                    <RadioButton Style="{StaticResource SegmentButton}" GroupName="Direction"
+                                                 ToolTip="Nur eingehende Verbindungen"
+                                                 IsChecked="{Binding DirectionFilter, Converter={StaticResource Eq}, ConverterParameter=Ein}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE74B;" Style="{StaticResource Glyph}" FontSize="10" Margin="0,0,5,0" />
+                                            <TextBlock Text="Ein" />
+                                        </StackPanel>
+                                    </RadioButton>
+                                    <RadioButton Style="{StaticResource SegmentButton}" GroupName="Direction"
+                                                 ToolTip="Nur ausgehende Verbindungen"
+                                                 IsChecked="{Binding DirectionFilter, Converter={StaticResource Eq}, ConverterParameter=Aus}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE74A;" Style="{StaticResource Glyph}" FontSize="10" Margin="0,0,5,0" />
+                                            <TextBlock Text="Aus" />
+                                        </StackPanel>
+                                    </RadioButton>
+                                </StackPanel>
+                            </Border>
+
+                            <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="10,0,0,0">
                                 <Button Command="{Binding TogglePauseCommand}" MinWidth="100" Margin="0,0,6,0"
                                         ToolTip="Anzeige anhalten. Neue Einträge werden weiter gesammelt.">
                                     <StackPanel Orientation="Horizontal">

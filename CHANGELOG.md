@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0 – 2026-11-12
+- Direction filter in the connection toolbar: All / In / Out (also reset by "clear filter").
+- App icon (shield with activity line) for exe, window title bar and dialogs.
+- Minimum window width raised to 1120 px so the toolbar fits.
+
 ## 0.3.0 – 2026-11-12
 - Redesigned UI for clarity: top tabs instead of sidebar, profile status as compact chips in the header, connection table gets most of the space.
 - Context side panel replaces stat tiles, top-10 cards and details box: overview (counts, most blocked processes, top remote addresses; click filters the list) or structured details of the selected connection with quick rule actions and raw line.

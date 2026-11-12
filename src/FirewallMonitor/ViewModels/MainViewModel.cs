@@ -31,6 +31,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _filterText = "";
     private string _filterColumn = "Alle";
     private string _actionFilter = "Alle";
+    private string _directionFilter = "Alle";
     private string _status = "";
     private string _currentPage = "Live";
     private string _themeMode = ThemeService.Mode;
@@ -66,7 +67,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         CopyRawCommand = new RelayCommand(_ => CopyRaw(), _ => Selected != null);
         FilterProcessCommand = new RelayCommand(p => ApplyQuickFilter("Prozess", p as string));
         FilterIpCommand = new RelayCommand(p => ApplyQuickFilter("IP", p as string));
-        ClearFilterCommand = new RelayCommand(_ => { FilterText = ""; FilterColumn = "Alle"; ActionFilter = "Alle"; });
+        ClearFilterCommand = new RelayCommand(_ => { FilterText = ""; FilterColumn = "Alle"; ActionFilter = "Alle"; DirectionFilter = "Alle"; });
     }
 
     public RangeObservableCollection<ConnectionEntry> Entries { get; } = new();
@@ -133,7 +134,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public string FilterColumn { get => _filterColumn; set { if (Set(ref _filterColumn, value)) RefreshFilter(); } }
     public string ActionFilter { get => _actionFilter; set { if (Set(ref _actionFilter, value)) RefreshFilter(); } }
 
-    public bool IsFiltered => FilterText.Trim().Length > 0 || ActionFilter != "Alle";
+    /// <summary>"Alle", "Ein" (inbound only) or "Aus" (outbound only).</summary>
+    public string DirectionFilter { get => _directionFilter; set { if (Set(ref _directionFilter, value)) RefreshFilter(); } }
+
+    public bool IsFiltered => FilterText.Trim().Length > 0 || ActionFilter != "Alle" || DirectionFilter != "Alle";
 
     // ---------- Overview numbers (based on the current view) ----------
 
@@ -256,6 +260,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var e = (ConnectionEntry)o;
         if (ActionFilter == "Blockiert" && !e.IsBlocked) return false;
         if (ActionFilter == "Zugelassen" && e.IsBlocked) return false;
+        if (DirectionFilter == "Ein" && (!e.DirectionKnown || e.IsOutbound)) return false;
+        if (DirectionFilter == "Aus" && !e.IsOutbound) return false;
 
         var t = FilterText.Trim();
         if (t.Length == 0) return true;
